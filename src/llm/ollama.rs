@@ -29,14 +29,14 @@ pub struct Message {
 }
 
 #[derive(Serialize)]
-struct FunctionSchema {
+pub struct FunctionSchema {
     name: &'static str,
     description: &'static str,
     parameters: Value,
 }
 
 #[derive(Serialize)]
-struct ToolSpec {
+pub struct ToolSpec {
     #[serde(rename = "type")]
     kind: &'static str,
     function: FunctionSchema,
@@ -164,21 +164,21 @@ impl OllamaClient {
         for _step in 0..MAX_TOOL_STEPS {
             let msg = self.post_once(history, Some(&tools))?;
 
-            if let Some(calls) = &msg.tool_calls {
-                if !calls.is_empty() {
-                    history.push(msg.clone());
-                    for call in calls {
-                        let name = &call.function.name;
-                        println!("[Tool -> {}] {}", name, call.function.arguments);
-                        let output = execute_tool(name, &call.function.arguments);
-                        history.push(Message {
-                            role: "tool".to_string(),
-                            content: output,
-                            tool_calls: None,
-                        });
-                    }
-                    continue;
+            if let Some(calls) = &msg.tool_calls
+                && !calls.is_empty()
+            {
+                history.push(msg.clone());
+                for call in calls {
+                    let name = &call.function.name;
+                    println!("[Tool -> {}] {}", name, call.function.arguments);
+                    let output = execute_tool(name, &call.function.arguments);
+                    history.push(Message {
+                        role: "tool".to_string(),
+                        content: output,
+                        tool_calls: None,
+                    });
                 }
+                continue;
             }
 
             let reply = msg.content.clone();

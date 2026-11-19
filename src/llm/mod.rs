@@ -1,3 +1,3 @@
 pub mod ollama;
 
-pub use ollama::{Message, OllamaClient, DEFAULT_MODEL};
+pub use ollama::{DEFAULT_MODEL, Message, OllamaClient};

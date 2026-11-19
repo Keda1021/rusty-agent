@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fs;
-use std::io::{self, BufRead, Write};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 pub const MAX_WRITE_BYTES: usize = 64_000;

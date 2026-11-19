@@ -1,7 +1,7 @@
 mod llm;
 mod workspace;
 
-use llm::{Message, OllamaClient, DEFAULT_MODEL};
+use llm::{DEFAULT_MODEL, Message, OllamaClient};
 use serde_json::Value;
 use std::error::Error;
 use std::io::{self, BufRead, Write};
@@ -34,11 +34,19 @@ fn print_help() {
     println!("  (Hoặc gõ câu hỏi thường để agent tự gọi tool khám phá workspace)");
 }
 
+fn parse_u64_arg(args: &Value, key: &str, default: u64) -> u64 {
+    match args.get(key) {
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(default),
+        Some(Value::String(s)) => s.trim().parse::<u64>().unwrap_or(default),
+        _ => default,
+    }
+}
+
 fn execute_workspace_tool(workspace: &std::path::Path, name: &str, args: &Value) -> String {
     match name {
         "list_tree" => {
             let rel = args.get("path").and_then(Value::as_str).unwrap_or(".");
-            let max_depth = args.get("max_depth").and_then(Value::as_u64).unwrap_or(3) as usize;
+            let max_depth = parse_u64_arg(args, "max_depth", 3) as usize;
 
             match resolve_workspace_path(workspace, rel) {
                 Ok(dir) => {
@@ -60,7 +68,7 @@ fn execute_workspace_tool(workspace: &std::path::Path, name: &str, args: &Value)
         },
         "search_workspace" => match args.get("query").and_then(Value::as_str) {
             Some(query) => {
-                let max_hits = args.get("max_hits").and_then(Value::as_u64).unwrap_or(20) as usize;
+                let max_hits = parse_u64_arg(args, "max_hits", 20) as usize;
                 let mut hits = Vec::new();
                 match search_workspace(workspace, workspace, query, max_hits, &mut hits) {
                     Ok(()) => {
@@ -201,7 +209,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 file_path
             );
             let mut block = String::new();
-            while let Some(body_line) = lines.next() {
+            for body_line in lines.by_ref() {
                 let raw = body_line?;
                 if raw.trim() == "::EOF" {
                     break;
@@ -243,13 +251,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                 tool_calls: None,
             });
 
+            let history_len_before = history.len();
             print!("[{}]: ", client.model);
             io::stdout().flush()?;
             if let Err(e) = client.send_with_tools(&mut history, |name, args| {
                 execute_workspace_tool(&workspace, name, args)
             }) {
                 eprintln!("\nLỗi gọi Ollama: {}", e);
-                history.pop();
+                history.truncate(history_len_before);
             }
             continue;
         }
@@ -260,13 +269,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             tool_calls: None,
         });
 
+        let history_len_before = history.len();
         print!("[{}]: ", client.model);
         io::stdout().flush()?;
         if let Err(e) = client.send_with_tools(&mut history, |name, args| {
             execute_workspace_tool(&workspace, name, args)
         }) {
             eprintln!("\nLỗi gọi Ollama: {}", e);
-            history.pop();
+            history.truncate(history_len_before);
         }
     }
 
