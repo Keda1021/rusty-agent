@@ -3,7 +3,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-fn should_skip_dir(name: &str) -> bool {
+pub fn should_skip_dir(name: &str) -> bool {
     matches!(
         name,
         "target" | ".git" | "node_modules" | ".idea" | ".vscode"
@@ -69,4 +69,48 @@ pub fn list_tree(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn make_temp_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("rusty_agent_explorer_{}_{}", label, nanos));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn lists_tree_and_skips_ignored_dirs() {
+        let ws = make_temp_dir("tree");
+        fs::create_dir_all(ws.join("src")).unwrap();
+        fs::create_dir_all(ws.join("target")).unwrap();
+        fs::write(ws.join("src/main.rs"), "fn main() {}").unwrap();
+        fs::write(ws.join("target/ignored.txt"), "skip").unwrap();
+
+        let mut out = String::new();
+        list_tree(&ws, &ws, "", 0, 2, &mut out).unwrap();
+
+        assert!(out.contains("src/"));
+        assert!(out.contains("main.rs"));
+        assert!(!out.contains("target/"));
+        assert!(!out.contains("ignored.txt"));
+
+        let _ = fs::remove_dir_all(ws);
+    }
+
+    #[test]
+    fn rejects_path_outside_workspace() {
+        let ws = make_temp_dir("escape");
+        let err = resolve_workspace_path(&ws, "..").unwrap_err();
+        assert!(err.to_string().contains("ngoài workspace"));
+
+        let _ = fs::remove_dir_all(ws);
+    }
 }
